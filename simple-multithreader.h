@@ -64,11 +64,34 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
         Args[i].low = low + i * chuck_size;
         Args[i].high = min(high, Args[i].low + chuck_size);
         Args[i].lambda = lambda;
-        pthread_create(&Threads[i], nullptr, thread_fxn, (void *)&Args[i]);
+
+        if(pthread_create(&Threads[i], nullptr, thread_fxn, (void *)&Args[i])!=0){
+            std::cerr << "Error creating thread " << i << std::endl;
+            for (int j = 0; j < i; ++j) {
+                pthread_cancel(Threads[j]);
+            }
+
+            // Cleanup: Join remaining threads
+            for (int j = i; j < numThreads; ++j) {
+                if (pthread_join(Threads[j], nullptr) != 0) {
+                    std::cerr << "Error joining thread " << j << std::endl;
+                }
+            }
+            exit(EXIT_FAILURE);
+        }
     }
 
     for (int i = 0; i < numThreads; i++) {
-        pthread_join(Threads[i], nullptr);
+        if (pthread_join(Threads[i], nullptr) != 0) {
+            std::cerr << "Error joining thread " << i << std::endl;
+
+            // Cleanup: Cancel remaining threads
+            for (int j = i; j < numThreads; ++j) {
+                pthread_cancel(Threads[j]);
+            }
+
+            exit(EXIT_FAILURE);
+        }
     }
     
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -107,14 +130,36 @@ void parallel_for(int low1, int high1, int low2, int high2, std::function<void(i
         args[i].lambda = lambda;
 
         // Create thread and check for errors
-        pthread_create(&threads[i], nullptr, thread_fxn2, static_cast<void *>(&args[i]));
+        if(pthread_create(&threads[i], nullptr, thread_fxn2, static_cast<void *>(&args[i]))!=0){
+            std::cerr << "Error creating thread " << i << std::endl;
+            for (int j = 0; j < i; ++j) {
+                pthread_cancel(threads[j]);
+            }
+
+            // Cleanup: Join remaining threads
+            for (int j = i; j < numThreads; ++j) {
+                if (pthread_join(threads[j], nullptr) != 0) {
+                    std::cerr << "Error joining thread " << j << std::endl;
+                }
+            }
+            exit(EXIT_FAILURE);
+        }
 
     }
 
     // Join threads
     for (int i = 0; i < numThreads; ++i) {
         // Join thread and check for errors
-        pthread_join(threads[i], nullptr);
+        if (pthread_join(threads[i], nullptr) != 0) {
+            std::cerr << "Error joining thread " << i << std::endl;
+
+            // Cleanup: Cancel remaining threads
+            for (int j = i; j < numThreads; ++j) {
+                pthread_cancel(threads[j]);
+            }
+
+            exit(EXIT_FAILURE);
+        }
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
